@@ -23,6 +23,9 @@
 #include <unistd.h>
 #include <linux/if_tun.h>
 
+#define _GNU_SOURCE 
+#include <fcntl.h>
+
 volatile sig_atomic_t exit_signal_received;
 typedef struct epoll_context* Ctx;
 struct epoll_context {
@@ -108,14 +111,18 @@ static void signal_handler(int sig)
 }
 int main(void) {
     char if_name[IFNAMSIZ];
+    unsigned char buf[1500];
     int nfds;
+
     struct epoll_context e = { .epollfd = epoll_create1(0) };
+
     if (e.epollfd == -1) {
         goto exit;
     }
     int fd = tcp_listener("127.0.0.1", "9999");
    
     int tunfd = tun_create(if_name, "tun-0");
+    memset(buf, 0, sizeof(buf));
     event_add(&e, fd);
     event_add(&e, tunfd);
     signal(SIGINT, signal_handler);
@@ -127,7 +134,9 @@ int main(void) {
             if (e.events[n].data.fd == fd) {
                 printf("listen in\n");
             } else if (e.events[n].data.fd == tunfd) {
-                printf("tun in\n");
+                ssize_t readnb;
+                while ((readnb = read(tunfd, buf, 1500)) < (ssize_t) 0 && errno == EINTR && !exit_signal_received);
+                printf("Read: %ld\n", readnb);
             }
         }
     }
