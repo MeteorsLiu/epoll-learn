@@ -21,6 +21,7 @@
 #include <string.h>
 #include <time.h>
 #include <unistd.h>
+#include <linux/if_tun.h>
 
 volatile sig_atomic_t exit_signal_received;
 typedef struct epoll_context* Ctx;
@@ -93,7 +94,7 @@ int event_add(Ctx epoll, int fd)
 {
     struct epoll_event ev;
     ev.events = EPOLLIN;
-    ev.data.fd = listen_sock;
+    ev.data.fd = fd;
     if (epoll_ctl(epoll->epollfd, EPOLL_CTL_ADD, fd, &ev) == -1) {
         perror("epoll_ctl: listen_sock");
         return -1;
@@ -122,11 +123,12 @@ int main(void) {
     while (exit_signal_received != 1) {
         nfds = epoll_wait(e.epollfd, e.events, 2, -1);
         if (nfds == -1) break;
-        if (e.events[0].events & EPOLLIN) {
-            printf("listen in");
-        }
-        if (e.events[1].events & EPOLLIN) {
-            printf("tun in");
+        for (int n = 0; n < nfds; ++n) {
+            if (e.events[n].data.fd == fd) {
+                printf("listen in\n");
+            } else if (e.events[n].data.fd == tunfd) {
+                printf("tun in\n");
+            }
         }
     }
     close(e.epollfd);
